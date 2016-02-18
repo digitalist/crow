@@ -252,8 +252,9 @@ namespace crow
 
         void handle()
         {
-            //res.connection = this;
+            res.adaptor = &adaptor_; // hide under sfinae?
             res.testKek<Adaptor>(adaptor_);
+
             cancel_deadline_timer();
             bool is_invalid_request = false;
             add_keep_alive_ = false;

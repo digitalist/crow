@@ -12,7 +12,12 @@ namespace crow
 
     template <typename Adaptor, typename Handler, typename ... Middlewares>
     class Connection;
-//    template <typename Adaptor, typename Handler, typename ... Middlewares>
+
+    template <typename Adaptor>
+    struct AdaptorWrapper{
+        Adaptor* adaptor_;
+    };
+
     struct response
     {
         template <typename Adaptor, typename Handler, typename ... Middlewares>
@@ -118,17 +123,14 @@ namespace crow
         {
             return is_alive_helper_ && is_alive_helper_();
         }
-
-        //Adaptor* adaptor_;
+        SocketAdaptor* adaptor;
         template <typename Adaptor>
         //void testKek(Adaptor& adaptor_){
         decltype(std::declval<Adaptor>().raw_socket())& testKek(Adaptor& adaptor_) {
             CROW_LOG_INFO << "AAAAAAAAAAAAAAAAAAAAAAA";
+            //this->adaptor.adaptor_=adaptor_;
             return adaptor_.raw_socket();
         }
-
-//        template <typename Adaptor>
-//        decltype(std::declval<Adaptor>().raw_socket()) kes;
 
 
         private:
