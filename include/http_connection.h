@@ -181,6 +181,7 @@ namespace crow
     template <typename Adaptor, typename Handler, typename ... Middlewares>
     class Connection
     {
+        friend class crow::response;
     public:
         Connection(
             boost::asio::io_service& io_service, 
@@ -199,6 +200,7 @@ namespace crow
             get_cached_date_str(get_cached_date_str_f),
             timer_queue(timer_queue)
         {
+         //   res.connection = this;
 #ifdef CROW_ENABLE_DEBUG
             connectionCount ++;
             CROW_LOG_DEBUG << "Connection open, total " << connectionCount << ", " << this;
@@ -250,6 +252,8 @@ namespace crow
 
         void handle()
         {
+            //res.connection = this;
+            res.testKek<Adaptor>(adaptor_);
             cancel_deadline_timer();
             bool is_invalid_request = false;
             add_keep_alive_ = false;
@@ -295,7 +299,9 @@ namespace crow
                 res.is_alive_helper_ = [this]()->bool{ return adaptor_.is_open(); };
 
                 ctx_ = detail::context<Middlewares...>();
+
                 req.middleware_context = (void*)&ctx_;
+
                 detail::middleware_call_helper<0, decltype(ctx_), decltype(*middlewares_), Middlewares...>(*middlewares_, req, res, ctx_);
 
                 if (!res.completed_)
@@ -567,7 +573,6 @@ namespace crow
 
         std::tuple<Middlewares...>* middlewares_;
         detail::context<Middlewares...> ctx_;
-
         std::function<std::string()>& get_cached_date_str;
         detail::dumb_timer_queue& timer_queue;
     };

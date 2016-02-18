@@ -4,15 +4,20 @@
 #include "json.h"
 #include "http_request.h"
 #include "ci_map.h"
+#include "socket_adaptors.h"
+#include "logging.h"
 
 namespace crow
 {
+
     template <typename Adaptor, typename Handler, typename ... Middlewares>
     class Connection;
+//    template <typename Adaptor, typename Handler, typename ... Middlewares>
     struct response
     {
         template <typename Adaptor, typename Handler, typename ... Middlewares>
         friend class crow::Connection;
+
 
         std::string body;
         json::wvalue json_value;
@@ -113,6 +118,18 @@ namespace crow
         {
             return is_alive_helper_ && is_alive_helper_();
         }
+
+        //Adaptor* adaptor_;
+        template <typename Adaptor>
+        //void testKek(Adaptor& adaptor_){
+        decltype(std::declval<Adaptor>().raw_socket())& testKek(Adaptor& adaptor_) {
+            CROW_LOG_INFO << "AAAAAAAAAAAAAAAAAAAAAAA";
+            return adaptor_.raw_socket();
+        }
+
+//        template <typename Adaptor>
+//        decltype(std::declval<Adaptor>().raw_socket()) kes;
+
 
         private:
             bool completed_{};
