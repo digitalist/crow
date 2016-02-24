@@ -200,7 +200,6 @@ namespace crow
             get_cached_date_str(get_cached_date_str_f),
             timer_queue(timer_queue)
         {
-         //   res.connection = this;
 #ifdef CROW_ENABLE_DEBUG
             connectionCount ++;
             CROW_LOG_DEBUG << "Connection open, total " << connectionCount << ", " << this;
@@ -321,6 +320,8 @@ namespace crow
 
         void complete_request()
         {
+            CROW_LOG_INFO << "Response: " << this << ' ' << req_.raw_url << ' ' << res.code << ' ' << close_connection_;
+
             if (need_to_call_after_handlers_)
             {
                 need_to_call_after_handlers_ = false;
@@ -332,11 +333,10 @@ namespace crow
                     decltype(*middlewares_)>
                 (*middlewares_, ctx_, req_, res);
             }
-
+            prepare_buffers();
             CROW_LOG_INFO << "Response: " << this << ' ' << req_.raw_url << ' ' << res.code << ' ' << close_connection_;
-            if (res.file_info.size)
+            if (res.file_info.path.size())
             {
-
                 do_write_static();
             }else {
                 do_write_general();
@@ -347,7 +347,7 @@ namespace crow
     private:
 
         void prepare_buffers(){
-            CROW_LOG_INFO << "buffers!";
+
             //auto self = this->shared_from_this();
             res.complete_request_handler_ = nullptr;
 
@@ -359,25 +359,25 @@ namespace crow
             }
 
             static std::unordered_map<int, std::string> statusCodes = {
-                    {200, "HTTP/1.1 200 OK\r\n"},
-                    {201, "HTTP/1.1 201 Created\r\n"},
-                    {202, "HTTP/1.1 202 Accepted\r\n"},
-                    {204, "HTTP/1.1 204 No Content\r\n"},
+                {200, "HTTP/1.1 200 OK\r\n"},
+                {201, "HTTP/1.1 201 Created\r\n"},
+                {202, "HTTP/1.1 202 Accepted\r\n"},
+                {204, "HTTP/1.1 204 No Content\r\n"},
 
-                    {300, "HTTP/1.1 300 Multiple Choices\r\n"},
-                    {301, "HTTP/1.1 301 Moved Permanently\r\n"},
-                    {302, "HTTP/1.1 302 Moved Temporarily\r\n"},
-                    {304, "HTTP/1.1 304 Not Modified\r\n"},
+                {300, "HTTP/1.1 300 Multiple Choices\r\n"},
+                {301, "HTTP/1.1 301 Moved Permanently\r\n"},
+                {302, "HTTP/1.1 302 Moved Temporarily\r\n"},
+                {304, "HTTP/1.1 304 Not Modified\r\n"},
 
-                    {400, "HTTP/1.1 400 Bad Request\r\n"},
-                    {401, "HTTP/1.1 401 Unauthorized\r\n"},
-                    {403, "HTTP/1.1 403 Forbidden\r\n"},
-                    {404, "HTTP/1.1 404 Not Found\r\n"},
+                {400, "HTTP/1.1 400 Bad Request\r\n"},
+                {401, "HTTP/1.1 401 Unauthorized\r\n"},
+                {403, "HTTP/1.1 403 Forbidden\r\n"},
+                {404, "HTTP/1.1 404 Not Found\r\n"},
 
-                    {500, "HTTP/1.1 500 Internal Server Error\r\n"},
-                    {501, "HTTP/1.1 501 Not Implemented\r\n"},
-                    {502, "HTTP/1.1 502 Bad Gateway\r\n"},
-                    {503, "HTTP/1.1 503 Service Unavailable\r\n"},
+                {500, "HTTP/1.1 500 Internal Server Error\r\n"},
+                {501, "HTTP/1.1 501 Not Implemented\r\n"},
+                {502, "HTTP/1.1 502 Bad Gateway\r\n"},
+                {503, "HTTP/1.1 503 Service Unavailable\r\n"},
             };
 
             static std::string seperator = ": ";
@@ -398,9 +398,9 @@ namespace crow
                 buffers_.emplace_back(status.data(), status.size());
             }
 
-            if (res.code >= 400 && res.body.empty())
+            if (res.code >= 400 && res.body.empty()){
                 res.body = statusCodes[res.code].substr(9);
-
+            }
             for(auto& kv : res.headers)
             {
                 buffers_.emplace_back(kv.first.data(), kv.first.size());
@@ -417,9 +417,6 @@ namespace crow
                 buffers_.emplace_back(content_length_tag.data(), content_length_tag.size());
                 buffers_.emplace_back(content_length_.data(), content_length_.size());
                 buffers_.emplace_back(crlf.data(), crlf.size());
-                CROW_LOG_INFO << "CL" << res.get_header_value("content-length");
-            }else{
-                CROW_LOG_INFO << "CLNO" << res.get_header_value("content-length");
             }
             if (!res.headers.count("server"))
             {
@@ -444,65 +441,30 @@ namespace crow
             }
 
             buffers_.emplace_back(crlf.data(), crlf.size());
-
-
         }
-
+#if !defined(_WIN32)
         void do_write_static(){
-            prepare_buffers();
             res.adaptor = &adaptor_;
             is_writing = true;
-            boost::asio::signal_set signals_;
-
-            boost::asio::async_write(adaptor_.socket(), buffers_,
-             [&](const boost::system::error_code& ec, std::size_t bytes_transferred)
-             {
-                 signals_.async_wait(
-                         [&](const boost::system::error_code& error, int signal_number){
-            //                 stop();
-                          //   res.do_write_sendfile();
-                         });
-
-//                 res.end();
-//                 res.clear();
-//                 check_destroy();
-//                 is_writing = false;
-//
-//                 if (!ec)
-//                 {
-//                     if (close_connection_)
-//                     {
-//                         adaptor_.close();
-//                         CROW_LOG_DEBUG << this << " from write(1)";
-//                         check_destroy();
-//                     }
-//                 }
-//                 else
-//                 {
-//                     CROW_LOG_DEBUG << this << " from write(2)";
-//                     check_destroy();
-//                 }
-                 CROW_LOG_INFO << "0 Serving" << res.file_info.path;
-
-                 //res.clear();
-
-             });
-            CROW_LOG_INFO << "1 like done";
-
-
-
-
-
-//                return;
+            boost::asio::write(adaptor_.socket(), buffers_);
+            res.do_write_sendfile();
+            //(-_-)
+            res.end();
+            res.clear();
+            buffers_.clear();
         }
+#else
+        void do_write_static(){
+            CROW_LOG_INFO << "windows static file support is not ready"
+        }
+}
+#endif
         void do_write_general(){
-            prepare_buffers();
             res_body_copy_.swap(res.body);
             buffers_.emplace_back(res_body_copy_.data(), res_body_copy_.size());
 
             do_write();
             res.clear();
-
 
             if (need_to_start_read_after_complete_)
             {
@@ -553,7 +515,6 @@ namespace crow
 
         void do_write()
         {
-            //auto self = this->shared_from_this();
             is_writing = true;
             boost::asio::async_write(adaptor_.socket(), buffers_, 
                 [&](const boost::system::error_code& ec, std::size_t bytes_transferred)
@@ -608,9 +569,6 @@ namespace crow
             CROW_LOG_DEBUG << this << " timer added: " << timer_cancel_key_.first << ' ' << timer_cancel_key_.second;
         }
 
-
-
-
     private:
         Adaptor adaptor_;
         Handler* handler_;
@@ -641,6 +599,7 @@ namespace crow
 
         std::tuple<Middlewares...>* middlewares_;
         detail::context<Middlewares...> ctx_;
+
         std::function<std::string()>& get_cached_date_str;
         detail::dumb_timer_queue& timer_queue;
     };

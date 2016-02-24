@@ -822,7 +822,7 @@ public:
 
             if (!rule_index)
             {
-                CROW_LOG_DEBUG << "Cannot match rules " << req.url;
+                CROW_LOG_INFO << "Cannot match rules " << req.url;
                 res = response(404);
                 res.end();
                 return;

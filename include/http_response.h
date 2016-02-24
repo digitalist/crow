@@ -6,27 +6,23 @@
 #include "ci_map.h"
 #include "socket_adaptors.h"
 #include "logging.h"
+#if !defined(_WIN32)
 #include <sys/stat.h>
 #include <sys/sendfile.h>
+#endif
 
 namespace crow
 {
-
     template <typename Adaptor, typename Handler, typename ... Middlewares>
     class Connection;
-
-
     struct response
     {
         template <typename Adaptor, typename Handler, typename ... Middlewares>
         friend class crow::Connection;
 
-
         std::string body;
         json::wvalue json_value;
         int code{200};
-
-
 
         // `headers' stores HTTP headers.
         ci_map headers;
@@ -123,11 +119,13 @@ namespace crow
         {
             return is_alive_helper_ && is_alive_helper_();
         }
-        SocketAdaptor* adaptor;
-
+ /* adding static file support here
+  * middlware must call res.set_static_file_info(filename)
+  * you must add route starting with /your/restricted/path/<string>
+  */
+#if !defined(_WIN32)
         struct static_file_info{
             std::string path = "";
-            u_long size = 0;
             struct stat statbuf;
             int statResult;
         };
@@ -135,47 +133,32 @@ namespace crow
 
         void set_static_file_info(std::string path){
             file_info.path = path;
-
-
             file_info.statResult = stat(file_info.path.c_str(), &file_info.statbuf);
             if (file_info.statResult == 0)
             {
-
                 code = 200;
-                CROW_LOG_INFO << "code is " << code;
-                file_info.size = file_info.statbuf.st_size;
-                add_header("Content-length", std::to_string(file_info.size));
-                add_header("content-length", std::to_string(file_info.size)); //testing crow
+                this->add_header("Content-length", std::to_string(file_info.statbuf.st_size));
             }
         }
 
+        SocketAdaptor* adaptor;
         void do_write_sendfile() {
             off_t start_= 0;
-
-//add mimetypes, headers
+//add mimetypes, headers?
 //Content-Disposition, Content-Type
-            CROW_LOG_INFO << "2 response::do_write_sendfile" << file_info.path;
-            int fd_{open(file_info.path.c_str(), O_RDONLY)};
-            assert(fd_ != 0);
 
+            int fd_{open(file_info.path.c_str(), O_RDONLY)};
+            //assert(fd_ != 0);
             if (file_info.statResult == 0)
             {
-                ssize_t result = sendfile(this->adaptor->socket().native(), fd_, &start_, file_info.size - start_);
-                CROW_LOG_INFO  << result << " from write(1), error is: " <<  errno  << "\n";
-                if (result == -1)
-                {
-                    // something bad happens
-                    CROW_LOG_INFO << "error writing socket: errno " << errno << "\n";
-                }
+                ssize_t bytes_sent = 0 ;
+                size_t total_bytes_sent = 0;
+                sendfile(adaptor->socket().native(), fd_, &start_, file_info.statbuf.st_size - start_);
             }
-            else
-            {
-                CROW_LOG_INFO << "response::do_write_sendfile WHERE IS MY FILE!" ;
-            }
-
 
         }
-
+#endif
+/* static file support end */
         private:
             bool completed_{};
             std::function<void()> complete_request_handler_;
