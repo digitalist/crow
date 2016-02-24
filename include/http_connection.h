@@ -252,9 +252,6 @@ namespace crow
 
         void handle()
         {
-            res.adaptor = &adaptor_; // hide under sfinae?
-//            res.testKek<Adaptor>(adaptor_);
-
             cancel_deadline_timer();
             bool is_invalid_request = false;
             add_keep_alive_ = false;
@@ -324,8 +321,6 @@ namespace crow
 
         void complete_request()
         {
-            CROW_LOG_INFO << "Response: " << this << ' ' << req_.raw_url << ' ' << res.code << ' ' << close_connection_;
-
             if (need_to_call_after_handlers_)
             {
                 need_to_call_after_handlers_ = false;
@@ -334,13 +329,28 @@ namespace crow
                 detail::after_handlers_call_helper<
                     ((int)sizeof...(Middlewares)-1),
                     decltype(ctx_),
-                    decltype(*middlewares_)> 
+                    decltype(*middlewares_)>
                 (*middlewares_, ctx_, req_, res);
             }
 
+            CROW_LOG_INFO << "Response: " << this << ' ' << req_.raw_url << ' ' << res.code << ' ' << close_connection_;
+            if (res.file_info.size)
+            {
+
+                do_write_static();
+            }else {
+                do_write_general();
+            }
+
+        }
+
+    private:
+
+        void prepare_buffers(){
+            CROW_LOG_INFO << "buffers!";
             //auto self = this->shared_from_this();
             res.complete_request_handler_ = nullptr;
-            
+
             if (!adaptor_.is_open())
             {
                 //CROW_LOG_DEBUG << this << " delete (socket is closed) " << is_reading << ' ' << is_writing;
@@ -349,25 +359,25 @@ namespace crow
             }
 
             static std::unordered_map<int, std::string> statusCodes = {
-                {200, "HTTP/1.1 200 OK\r\n"},
-                {201, "HTTP/1.1 201 Created\r\n"},
-                {202, "HTTP/1.1 202 Accepted\r\n"},
-                {204, "HTTP/1.1 204 No Content\r\n"},
+                    {200, "HTTP/1.1 200 OK\r\n"},
+                    {201, "HTTP/1.1 201 Created\r\n"},
+                    {202, "HTTP/1.1 202 Accepted\r\n"},
+                    {204, "HTTP/1.1 204 No Content\r\n"},
 
-                {300, "HTTP/1.1 300 Multiple Choices\r\n"},
-                {301, "HTTP/1.1 301 Moved Permanently\r\n"},
-                {302, "HTTP/1.1 302 Moved Temporarily\r\n"},
-                {304, "HTTP/1.1 304 Not Modified\r\n"},
+                    {300, "HTTP/1.1 300 Multiple Choices\r\n"},
+                    {301, "HTTP/1.1 301 Moved Permanently\r\n"},
+                    {302, "HTTP/1.1 302 Moved Temporarily\r\n"},
+                    {304, "HTTP/1.1 304 Not Modified\r\n"},
 
-                {400, "HTTP/1.1 400 Bad Request\r\n"},
-                {401, "HTTP/1.1 401 Unauthorized\r\n"},
-                {403, "HTTP/1.1 403 Forbidden\r\n"},
-                {404, "HTTP/1.1 404 Not Found\r\n"},
+                    {400, "HTTP/1.1 400 Bad Request\r\n"},
+                    {401, "HTTP/1.1 401 Unauthorized\r\n"},
+                    {403, "HTTP/1.1 403 Forbidden\r\n"},
+                    {404, "HTTP/1.1 404 Not Found\r\n"},
 
-                {500, "HTTP/1.1 500 Internal Server Error\r\n"},
-                {501, "HTTP/1.1 501 Not Implemented\r\n"},
-                {502, "HTTP/1.1 502 Bad Gateway\r\n"},
-                {503, "HTTP/1.1 503 Service Unavailable\r\n"},
+                    {500, "HTTP/1.1 500 Internal Server Error\r\n"},
+                    {501, "HTTP/1.1 501 Not Implemented\r\n"},
+                    {502, "HTTP/1.1 502 Bad Gateway\r\n"},
+                    {503, "HTTP/1.1 503 Service Unavailable\r\n"},
             };
 
             static std::string seperator = ": ";
@@ -407,6 +417,9 @@ namespace crow
                 buffers_.emplace_back(content_length_tag.data(), content_length_tag.size());
                 buffers_.emplace_back(content_length_.data(), content_length_.size());
                 buffers_.emplace_back(crlf.data(), crlf.size());
+                CROW_LOG_INFO << "CL" << res.get_header_value("content-length");
+            }else{
+                CROW_LOG_INFO << "CLNO" << res.get_header_value("content-length");
             }
             if (!res.headers.count("server"))
             {
@@ -425,17 +438,71 @@ namespace crow
             }
             if (add_keep_alive_)
             {
-                static std::string keep_alive_tag = "Connetion: Keep-Alive";
+                static std::string keep_alive_tag = "Connection: Keep-Alive";
                 buffers_.emplace_back(keep_alive_tag.data(), keep_alive_tag.size());
                 buffers_.emplace_back(crlf.data(), crlf.size());
             }
 
             buffers_.emplace_back(crlf.data(), crlf.size());
+
+
+        }
+
+        void do_write_static(){
+            prepare_buffers();
+            res.adaptor = &adaptor_;
+            is_writing = true;
+            boost::asio::signal_set signals_;
+
+            boost::asio::async_write(adaptor_.socket(), buffers_,
+             [&](const boost::system::error_code& ec, std::size_t bytes_transferred)
+             {
+                 signals_.async_wait(
+                         [&](const boost::system::error_code& error, int signal_number){
+            //                 stop();
+                          //   res.do_write_sendfile();
+                         });
+
+//                 res.end();
+//                 res.clear();
+//                 check_destroy();
+//                 is_writing = false;
+//
+//                 if (!ec)
+//                 {
+//                     if (close_connection_)
+//                     {
+//                         adaptor_.close();
+//                         CROW_LOG_DEBUG << this << " from write(1)";
+//                         check_destroy();
+//                     }
+//                 }
+//                 else
+//                 {
+//                     CROW_LOG_DEBUG << this << " from write(2)";
+//                     check_destroy();
+//                 }
+                 CROW_LOG_INFO << "0 Serving" << res.file_info.path;
+
+                 //res.clear();
+
+             });
+            CROW_LOG_INFO << "1 like done";
+
+
+
+
+
+//                return;
+        }
+        void do_write_general(){
+            prepare_buffers();
             res_body_copy_.swap(res.body);
             buffers_.emplace_back(res_body_copy_.data(), res_body_copy_.size());
 
             do_write();
             res.clear();
+
 
             if (need_to_start_read_after_complete_)
             {
@@ -445,7 +512,6 @@ namespace crow
             }
         }
 
-    private:
         void do_read()
         {
             //auto self = this->shared_from_this();
@@ -543,138 +609,7 @@ namespace crow
         }
 
 
-//        void do_write_sendfile(const std::string& path, const std::string& restrictedDirectory) {
-//
-//            if (!fileExistsInAbsoluteGivenPath(path.c_str(), restrictedDirectory)){
-////                res.code = 404;
-////                res_body_copy_.swap(res.body);
-////                buffers_.emplace_back(res_body_copy_.data(), res_body_copy_.size());
-////                CROW_LOG_INFO << "File not found, errno " <<  errno  << "\n";
-////                do_write();
-////                res.end();
-////                adaptor_.close();
-//
-//            }
-//            else
-//            {
-//                is_writing = true;
-//                auto prevCloseConnectionValue = close_connection_;
-//                //close_connection_ = true;
-//
-//                off_t start_= 0;
-//
-////add mimetypes, headers
-////Content-Disposition, Content-Type
-//
-//                int fd_{open(path.c_str(), O_RDONLY)};
-//                assert(fd_ != 0);
-//                struct stat statbuf;
-//                int statResult = stat(path.c_str(), &statbuf);
-//                if (statResult == 0){
-//                    size_t count_ = statbuf.st_size;
-//                    res.set_header("content-length", std::to_string(count_));
-//                    prepare_buffers();
-//                    ssize_t result = sendfile(adaptor_.socket().native(), fd_, &start_, count_ - start_);
-//                    CROW_LOG_INFO  << result << " from write(1), error is: " <<  errno  << "\n";
-//
-//                    if (result == -1)
-//                    {
-//                        // something bad happens
-//                        CROW_LOG_INFO << "error writing socket: errno " << errno << "\n";
-//                    }
-//                }
-//                    adaptor_.close();
-//
-//            }
-//
-//            is_writing = false;
-//            check_destroy();
-//        }
-        void prepare_buffers(){
-            static std::string seperator = ": ";
-            static std::string crlf = "\r\n";
-            static std::unordered_map<int, std::string> statusCodes = {
-                    {200, "HTTP/1.1 200 OK\r\n"},
-                    {201, "HTTP/1.1 201 Created\r\n"},
-                    {202, "HTTP/1.1 202 Accepted\r\n"},
-                    {204, "HTTP/1.1 204 No Content\r\n"},
 
-                    {300, "HTTP/1.1 300 Multiple Choices\r\n"},
-                    {301, "HTTP/1.1 301 Moved Permanently\r\n"},
-                    {302, "HTTP/1.1 302 Moved Temporarily\r\n"},
-                    {304, "HTTP/1.1 304 Not Modified\r\n"},
-
-                    {400, "HTTP/1.1 400 Bad Request\r\n"},
-                    {401, "HTTP/1.1 401 Unauthorized\r\n"},
-                    {403, "HTTP/1.1 403 Forbidden\r\n"},
-                    {404, "HTTP/1.1 404 Not Found\r\n"},
-
-                    {500, "HTTP/1.1 500 Internal Server Error\r\n"},
-                    {501, "HTTP/1.1 501 Not Implemented\r\n"},
-                    {502, "HTTP/1.1 502 Bad Gateway\r\n"},
-                    {503, "HTTP/1.1 503 Service Unavailable\r\n"},
-            };
-            buffers_.clear();
-            buffers_.reserve(4*(res.headers.size()+5)+3);
-
-            if (res.body.empty() && res.json_value.t() == json::type::Object)
-            {
-                res.body = json::dump(res.json_value);
-            }
-
-            if (!statusCodes.count(res.code))
-                res.code = 500;
-            {
-                auto& status = statusCodes.find(res.code)->second;
-                buffers_.emplace_back(status.data(), status.size());
-            }
-
-            if (res.code >= 400 && res.body.empty())
-                res.body = statusCodes[res.code].substr(9); CROW_LOG_INFO << "File not found, errno " <<  errno  << "\n";
-
-            for(auto& kv : res.headers)
-            {
-                buffers_.emplace_back(kv.first.data(), kv.first.size());
-                buffers_.emplace_back(seperator.data(), seperator.size());
-                buffers_.emplace_back(kv.second.data(), kv.second.size());
-                buffers_.emplace_back(crlf.data(), crlf.size());
-
-            }
-
-            if (!res.headers.count("content-length"))
-            {
-                content_length_ = std::to_string(res.body.size());
-                static std::string content_length_tag = "Content-Length: ";
-                buffers_.emplace_back(content_length_tag.data(), content_length_tag.size());
-                buffers_.emplace_back(content_length_.data(), content_length_.size());
-                buffers_.emplace_back(crlf.data(), crlf.size());
-                CROW_LOG_INFO << "CONTENTHDR!" << res.get_header_value("content-length");
-            }
-            CROW_LOG_INFO << "CONTENT!" << res.get_header_value("content-length");
-            if (!res.headers.count("server"))
-            {
-                static std::string server_tag = "Server: ";
-                buffers_.emplace_back(server_tag.data(), server_tag.size());
-                buffers_.emplace_back(server_name_.data(), server_name_.size());
-                buffers_.emplace_back(crlf.data(), crlf.size());
-            }
-            if (!res.headers.count("date"))
-            {
-                static std::string date_tag = "Date: ";
-                date_str_ = get_cached_date_str();
-                buffers_.emplace_back(date_tag.data(), date_tag.size());
-                buffers_.emplace_back(date_str_.data(), date_str_.size());
-                buffers_.emplace_back(crlf.data(), crlf.size());
-            }
-            if (add_keep_alive_)
-            {
-                static std::string keep_alive_tag = "Connetion: Keep-Alive";
-                buffers_.emplace_back(keep_alive_tag.data(), keep_alive_tag.size());
-                buffers_.emplace_back(crlf.data(), crlf.size());
-            }
-
-            buffers_.emplace_back(crlf.data(), crlf.size());
-        }
 
     private:
         Adaptor adaptor_;
