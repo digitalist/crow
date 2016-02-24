@@ -223,7 +223,8 @@ namespace crow
         }
 
         void start()
-        {
+        { CROW_LOG_INFO << "http_connection:h start,  code is" << res.get_header_value("content-length");
+
             adaptor_.start([this](const boost::system::error_code& ec) {
                 if (!ec)
                 {
@@ -239,7 +240,8 @@ namespace crow
         }
 
         void handle_header()
-        {
+        { CROW_LOG_INFO << "http_connection:h handlheader,  code is" << res.get_header_value("content-length");
+
             // HTTP 1.1 Expect: 100-continue
             if (parser_.check_version(1, 1) && parser_.headers.count("expect") && get_header_value(parser_.headers, "expect") == "100-continue")
             {
@@ -251,7 +253,8 @@ namespace crow
         }
 
         void handle()
-        {
+        { CROW_LOG_INFO << "http_connection:h handl,  code is" << res.get_header_value("content-length");
+
             cancel_deadline_timer();
             bool is_invalid_request = false;
             add_keep_alive_ = false;
@@ -321,6 +324,7 @@ namespace crow
 
         void complete_request()
         {
+            CROW_LOG_INFO << "http_connection:h complete_request,  code is" << res.get_header_value("content-length");
             if (need_to_call_after_handlers_)
             {
                 need_to_call_after_handlers_ = false;
@@ -332,9 +336,9 @@ namespace crow
                     decltype(*middlewares_)>
                 (*middlewares_, ctx_, req_, res);
             }
-
+            prepare_buffers();
             CROW_LOG_INFO << "Response: " << this << ' ' << req_.raw_url << ' ' << res.code << ' ' << close_connection_;
-            if (res.file_info.size)
+            if (res.file_info.path.size())
             {
 
                 do_write_static();
@@ -347,12 +351,12 @@ namespace crow
     private:
 
         void prepare_buffers(){
-            CROW_LOG_INFO << "buffers!";
+
             //auto self = this->shared_from_this();
             res.complete_request_handler_ = nullptr;
 
             if (!adaptor_.is_open())
-            {
+            {CROW_LOG_DEBUG << this << "RETURNNOADAPTOR ";
                 //CROW_LOG_DEBUG << this << " delete (socket is closed) " << is_reading << ' ' << is_writing;
                 //delete this;
                 return;
@@ -398,8 +402,11 @@ namespace crow
                 buffers_.emplace_back(status.data(), status.size());
             }
 
-            if (res.code >= 400 && res.body.empty())
+            if (res.code >= 400 && res.body.empty()){
                 res.body = statusCodes[res.code].substr(9);
+                CROW_LOG_INFO << "http_connection:h, line 403" << statusCodes[res.code].substr(9);
+            }
+
 
             for(auto& kv : res.headers)
             {
@@ -409,7 +416,7 @@ namespace crow
                 buffers_.emplace_back(crlf.data(), crlf.size());
 
             }
-
+            CROW_LOG_INFO <<  "cllllllllll is " << res.get_header_value("Сontent-length");
             if (!res.headers.count("content-length"))
             {
                 content_length_ = std::to_string(res.body.size());
@@ -449,19 +456,24 @@ namespace crow
         }
 
         void do_write_static(){
-            prepare_buffers();
+
             res.adaptor = &adaptor_;
             is_writing = true;
-            boost::asio::signal_set signals_;
+            boost::asio::write(adaptor_.socket(), buffers_);
+            res.do_write_sendfile();
+            res.end();
+            res.clear();
+            buffers_.clear();
+//                 res.clear();
+          //  boost::asio::signal_set signals_;
 
-            boost::asio::async_write(adaptor_.socket(), buffers_,
-             [&](const boost::system::error_code& ec, std::size_t bytes_transferred)
-             {
-                 signals_.async_wait(
-                         [&](const boost::system::error_code& error, int signal_number){
-            //                 stop();
-                          //   res.do_write_sendfile();
-                         });
+//            boost::asio::async_write(adaptor_.socket(), buffers_,
+//             [&](const boost::system::error_code& ec, std::size_t bytes_transferred)
+//             {
+//
+//            //                 stop();
+//
+//                 res.do_write_sendfile();
 
 //                 res.end();
 //                 res.clear();
@@ -486,17 +498,14 @@ namespace crow
 
                  //res.clear();
 
-             });
+//             });
+
             CROW_LOG_INFO << "1 like done";
-
-
-
-
-
-//                return;
+       //return;
         }
         void do_write_general(){
-            prepare_buffers();
+            CROW_LOG_INFO << "do_write_general";
+
             res_body_copy_.swap(res.body);
             buffers_.emplace_back(res_body_copy_.data(), res_body_copy_.size());
 
@@ -600,9 +609,10 @@ namespace crow
             timer_cancel_key_ = timer_queue.add([this]
             {
                 if (!adaptor_.is_open())
-                {
+                { CROW_LOG_DEBUG << this << "WEDIEHERE ";
                     return;
                 }
+                CROW_LOG_DEBUG << this << "CLOSEADAPTER";
                 adaptor_.close();
             });
             CROW_LOG_DEBUG << this << " timer added: " << timer_cancel_key_.first << ' ' << timer_cancel_key_.second;

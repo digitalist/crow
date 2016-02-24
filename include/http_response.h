@@ -123,11 +123,10 @@ namespace crow
         {
             return is_alive_helper_ && is_alive_helper_();
         }
-        SocketAdaptor* adaptor;
+
 
         struct static_file_info{
             std::string path = "";
-            u_long size = 0;
             struct stat statbuf;
             int statResult;
         };
@@ -142,37 +141,61 @@ namespace crow
             {
 
                 code = 200;
-                CROW_LOG_INFO << "code is " << code;
-                file_info.size = file_info.statbuf.st_size;
-                add_header("Content-length", std::to_string(file_info.size));
-                add_header("content-length", std::to_string(file_info.size)); //testing crow
-            }
-        }
 
+
+                CROW_LOG_INFO << "code is " << code << ", size iz " << file_info.statbuf.st_size;
+                this->add_header("Content-length", std::to_string(file_info.statbuf.st_size));
+                //this->add_header("content-length", std::to_string(file_info.statbuf.st_size)); //testing crow
+                CROW_LOG_INFO <<  "cl is " << get_header_value("Content-length") << file_info.path;
+                CROW_LOG_INFO <<  "cl is " << get_header_value("content-length")  << file_info.path;
+            }
+            CROW_LOG_INFO <<  "CLIS" << get_header_value("content-length") << file_info.path;
+        }
+        SocketAdaptor* adaptor;
         void do_write_sendfile() {
             off_t start_= 0;
 
 //add mimetypes, headers
 //Content-Disposition, Content-Type
-            CROW_LOG_INFO << "2 response::do_write_sendfile" << file_info.path;
+            CROW_LOG_INFO << "(2) response::do_write_sendfile" << file_info.path;
             int fd_{open(file_info.path.c_str(), O_RDONLY)};
             assert(fd_ != 0);
 
             if (file_info.statResult == 0)
             {
-                ssize_t result = sendfile(this->adaptor->socket().native(), fd_, &start_, file_info.size - start_);
-                CROW_LOG_INFO  << result << " from write(1), error is: " <<  errno  << "\n";
-                if (result == -1)
-                {
-                    // something bad happens
-                    CROW_LOG_INFO << "error writing socket: errno " << errno << "\n";
-                }
+//                ssize_t result = sendfile(this->adaptor->socket().native(), fd_, &start_, file_info.size - start_);
+//                CROW_LOG_INFO  << result << " from write(1), error is: " <<  errno  << "\n";
+//                if (result == -1)
+//                {
+//                    // something bad happens
+//                    CROW_LOG_INFO << "error writing socket: errno " << errno << "\n";
+//                }
+
+                ssize_t bytes_sent = 0 ;
+                size_t total_bytes_sent = 0;
+                CROW_LOG_INFO << "(2.5) fileinfosize" << file_info.statbuf.st_size;
+                sendfile(adaptor->socket().native(), fd_, &start_, file_info.statbuf.st_size - start_);
+//                while (total_bytes_sent < file_info.statbuf.st_size) {
+//
+//                    if ((bytes_sent = sendfile(
+//                            adaptor->socket().native(), fd_, &start_, file_info.statbuf.st_size - start_)) <= 0) {
+//
+//
+//                        if (errno == EINTR || errno == EAGAIN) {
+//                            // Interrupted system call/try again
+//                            // Just skip to the top of the loop and try again
+//                            continue;
+//                        }
+//                        perror("sendfile");
+//                        //return -1;
+//                    }CROW_LOG_INFO << "(3) response::do_write_sendfile " << bytes_sent;
+//                    total_bytes_sent += bytes_sent;
+//                }
             }
             else
             {
                 CROW_LOG_INFO << "response::do_write_sendfile WHERE IS MY FILE!" ;
             }
-
 
         }
 
