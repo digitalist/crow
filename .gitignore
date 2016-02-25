@@ -32,7 +32,3 @@ unittest
 build
 
 .directory
-
-#clion cmake support
-CMakeLists.txt
-main.cpp
