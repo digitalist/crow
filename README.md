@@ -84,6 +84,15 @@ CROW_ROUTE(app, "/add_json")
     return crow::response{os.str()};
 });
 ```
+#### Handling static files
+currently only works on systems supporting sendfile system call
+ put this in your middleware handler:
+```c++
+void middleware::after_handle(request &req, response &res, context &ctx) {
+//unsafe way, no check  on allowed paths, can read all your files!
+res.set_static_file_info(url)
+}
+```
 
 ## How to Build
 
